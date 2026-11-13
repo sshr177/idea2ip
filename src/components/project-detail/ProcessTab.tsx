@@ -1,13 +1,16 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { getMaterials } from '../../api/materials';
 import styled from 'styled-components';
 import MaterialModal from './MaterialModal';
+import MaterialEditModal from './MaterialEditModal';
+import MaterialDetailModal from './MaterialDetailModal';
 import type { ProcessMaterial } from '../../types/project';
 import plusIcon from '../../assets/plus-small.svg';
 import emptyMaterialsIcon from '../../assets/empty-materials.svg';
 import DetailCard from './DetailCard';
 import TimelineItem from './TimelineItem';
 import PrimaryButton from '../PrimaryButton';
-import { useProjectMaterials } from '../../store/projectStore';
+import { useProjectMaterials, useProjectStore } from '../../store/projectStore';
 import { colors } from '../../styles/theme';
 
 // 프로젝트 상세 > "제작 과정" 탭: 창작 과정 타임라인
@@ -15,14 +18,42 @@ import { colors } from '../../styles/theme';
 // - 제작자료 없음: 가운데 안내 문구 + "새 제작자료" 버튼 (오른쪽 위 버튼은 숨김)
 
 export default function ProcessTab({ projectId }: { projectId: string }) {
-  // TODO: 제작자료 API 연동 시 projectId 기준 조회로 교체
+  const [detailId, setDetailId] = useState<string | null>(null);
   const materials = useProjectMaterials(projectId);
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{ projectId: string; attempt: number; error?: string }>();
+  useEffect(() => {
+    const controller = new AbortController();
+    const token = localStorage.getItem('accessToken');
+    getMaterials(projectId, controller.signal).then((items) => {
+      if (controller.signal.aborted) return;
+      if (localStorage.getItem('accessToken') !== token) {
+        setResult({ projectId, attempt, error: '로그인 상태가 변경되었습니다. 다시 로그인해주세요.' });
+        return;
+      }
+      useProjectStore.setState((state) => ({
+        materialsByProjectId: {
+          ...state.materialsByProjectId,
+          [projectId]: items.map((item) => {
+            const existing = state.materialsByProjectId[projectId]?.find((old) => old.id === item.id);
+            return { ...item, type: existing?.type ?? null, aiTool: existing?.aiTool };
+          }),
+        },
+      }));
+      setResult({ projectId, attempt });
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) setResult({ projectId, attempt, error: error instanceof Error ? error.message : '자료 목록을 불러오지 못했습니다.' });
+    });
+    return () => controller.abort();
+  }, [projectId, attempt]);
+  const current = result?.projectId === projectId && result.attempt === attempt ? result : undefined;
   const isEmpty = materials.length === 0;
   // null: 닫힘 / { material: undefined }: 추가 / { material }: 해당 자료 수정
   const [modal, setModal] = useState<{ material?: ProcessMaterial } | null>(null);
   const openModal = () => setModal({});
   const openEditModal = (material: ProcessMaterial) => setModal({ material });
   const closeModal = useCallback(() => setModal(null), []);
+  const onCreated = () => { setModal(null); setAttempt((value) => value + 1); };
 
   return (
     <DetailCard>
@@ -34,7 +65,9 @@ export default function ProcessTab({ projectId }: { projectId: string }) {
         {!isEmpty && <NewMaterialButton onClick={openModal} />}
       </Header>
 
-      {isEmpty ? (
+      {!current ? <p role="status">창작 자료를 불러오는 중입니다.</p> : current.error ? (
+        <div role="alert"><p>{current.error}</p><button type="button" onClick={() => setAttempt((value) => value + 1)}>다시 시도</button></div>
+      ) : isEmpty ? (
         <EmptyState>
           <EmptyMessage>
             <EmptyIcon>
@@ -57,13 +90,20 @@ export default function ProcessTab({ projectId }: { projectId: string }) {
               index={index}
               material={material}
               onEdit={openEditModal}
+              onView={(item) => setDetailId(item.id)}
             />
           ))}
         </Timeline>
       )}
 
+      {detailId && <MaterialDetailModal key={detailId} projectId={projectId} materialId={detailId} onClose={() => setDetailId(null)} onDeleted={() => {
+        setDetailId(null);
+        setAttempt((value) => value + 1);
+      }} />}
       {modal && (
-        <MaterialModal projectId={projectId} material={modal.material} onClose={closeModal} />
+        modal.material
+          ? <MaterialEditModal projectId={projectId} material={modal.material} onClose={closeModal} onSaved={onCreated} />
+          : <MaterialModal projectId={projectId} onClose={closeModal} onCreated={onCreated} />
       )}
     </DetailCard>
   );

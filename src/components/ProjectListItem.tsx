@@ -5,6 +5,7 @@ import { getWorkTypeLabel } from '../constants/workTypes';
 import type { Project } from '../types/project';
 import { formatDate } from '../utils/formatDate';
 import { colors } from '../styles/theme';
+import ProjectThumbnail from './ProjectThumbnail';
 
 // "내 프로젝트" 목록의 가로형 프로젝트 카드 + "새 프로젝트 만들기" 카드
 
@@ -21,7 +22,7 @@ export default function ProjectListItem({ project, onOpen }: ProjectListItemProp
     // 카드 어디를 눌러도 "열기"와 동일하게 동작 (키보드는 "열기" 버튼으로 접근)
     <Item $clickable onClick={() => onOpen(id)}>
       <Left>
-        <Thumbnail>{thumbnailUrl && <img src={thumbnailUrl} alt="" />}</Thumbnail>
+        <Thumbnail><ProjectThumbnail src={thumbnailUrl} /></Thumbnail>
         <Info>
           <TopRow>
             <TextGroup>

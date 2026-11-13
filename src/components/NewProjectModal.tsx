@@ -19,47 +19,56 @@ import type { WorkType } from '../constants/workTypes';
 
 export interface NewProjectInput {
   name: string;
-  image: File;
+  image: File | null;
   workType: WorkType;
 }
 
 interface Props {
+  projectCreated?: boolean;
   onClose: () => void;
-  onSubmit: (input: NewProjectInput) => void;
+  onSubmit: (input: NewProjectInput) => Promise<void>;
 }
 
 // 대시보드 / 내 프로젝트의 "새 프로젝트" 버튼으로 여는 생성 모달
 
-export default function NewProjectModal({ onClose, onSubmit }: Props) {
+export default function NewProjectModal({ onClose, onSubmit, projectCreated = false }: Props) {
   const [name, setName] = useState('');
   const [image, setImage] = useState<File | null>(null);
   const [workType, setWorkType] = useState<WorkType>(WORK_TYPES[0].value);
   const nameRef = useRef<HTMLInputElement>(null);
   const { showAlert, alertNode } = useAlertModal(1800, 'subtle');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     nameRef.current?.focus();
   }, []);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
 
     if (!name.trim()) {
       showAlert('프로젝트 이름을 작성해 주세요.');
       nameRef.current?.focus();
       return;
     }
-    if (!image) {
-      showAlert('이미지를 등록해주세요.');
-      return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    try {
+      await onSubmit({ name: name.trim(), image, workType });
+    } catch (error) {
+      showAlert(error instanceof Error ? error.message : '프로젝트를 생성하지 못했습니다.');
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
     }
-
-    onSubmit({ name: name.trim(), image, workType });
   };
 
   return (
-    <ModalShell titleId="new-project-title" title="새 프로젝트 시작" onClose={onClose}>
-      <Form onSubmit={handleSubmit} noValidate>
+    <ModalShell titleId="new-project-title" title="새 프로젝트 시작" onClose={() => { if (!submittingRef.current) onClose(); }}>
+      <Form onSubmit={handleSubmit} noValidate aria-busy={isSubmitting}>
+        <fieldset disabled={isSubmitting} style={{ display: 'contents' }}>
         <Fields>
           <Field>
             <Label htmlFor="project-name">프로젝트 이름</Label>
@@ -70,6 +79,7 @@ export default function NewProjectModal({ onClose, onSubmit }: Props) {
               autoComplete="off"
               placeholder="예: 달빛 정원 캐릭터"
               value={name}
+              readOnly={projectCreated}
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
@@ -79,6 +89,7 @@ export default function NewProjectModal({ onClose, onSubmit }: Props) {
             onChange={setImage}
             onInvalid={() => showAlert('지원하지 않는 이미지 형식입니다.')}
           />
+          <p style={{ margin: 0, fontSize: 12 }}>{projectCreated ? '프로젝트는 생성되었습니다. 썸네일만 다시 저장할 수 있습니다.' : '썸네일은 선택 사항이며 프로젝트 생성 후 서버에 저장됩니다.'}</p>
 
           <Field role="group" aria-labelledby="work-type-label">
             <Label as="p" id="work-type-label">
@@ -89,6 +100,7 @@ export default function NewProjectModal({ onClose, onSubmit }: Props) {
                 <TypeCard
                   key={value}
                   type="button"
+                  disabled={projectCreated}
                   aria-pressed={workType === value}
                   $selected={workType === value}
                   onClick={() => setWorkType(value)}
@@ -106,8 +118,9 @@ export default function NewProjectModal({ onClose, onSubmit }: Props) {
           <CancelButton type="button" onClick={onClose}>
             취소
           </CancelButton>
-          <SubmitButton type="submit">프로젝트 만들기</SubmitButton>
+          <SubmitButton type="submit">{isSubmitting ? '저장 중…' : projectCreated ? '썸네일 저장' : '프로젝트 만들기'}</SubmitButton>
         </ModalActions>
+        </fieldset>
       </Form>
     </ModalShell>
   );

@@ -1,4 +1,7 @@
 import styled from 'styled-components';
+import { useEffect, useState } from 'react';
+import { getInterviewReadiness, INTERVIEW_FIELD_LABELS, INTERVIEW_STATUS_LABELS } from '../../../api/interview';
+import type { InterviewReadiness } from '../../../api/interview';
 import {
   Caption,
   InfoRow,
@@ -11,15 +14,12 @@ import {
   RowList,
   RowText,
 } from './interview.styles';
-import { useFinalWork, useProjectMaterials } from '../../../store/projectStore';
-import type { BriefField } from '../../../types/interview';
-import { getMaterialReadiness } from '../../../utils/interview';
 import { colors } from '../../../styles/theme';
 
 interface Props {
   projectId: string;
-  fields: BriefField[];
   onStart: () => void;
+  starting?: boolean;
   /** "제작 과정에서 자료 추가 →" → 제작 과정 탭 */
   onGoToProcess: () => void;
 }
@@ -28,14 +28,34 @@ interface Props {
 // - 필수 자료 3개 모두 준비됨: 1번 (AI 인터뷰 시작 활성)
 // - 하나라도 없음: 2번 (안내 + 제작 과정 이동 버튼, 시작 비활성)
 
-export default function InterviewReady({ projectId, fields, onStart, onGoToProcess }: Props) {
-  const finalWork = useFinalWork(projectId);
-  const materials = useProjectMaterials(projectId);
-  const readiness = getMaterialReadiness(!!finalWork, materials);
-  const isReady = readiness.every((item) => item.ready);
-
-  const doneCount = fields.filter((f) => f.status === 'done').length;
-  const needsWorkCount = fields.length - doneCount;
+export default function InterviewReady({ projectId, onStart, onGoToProcess, starting = false }: Props) {
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{ projectId: string; attempt: number; data?: InterviewReadiness; error?: string }>();
+  useEffect(() => {
+    const controller = new AbortController();
+    const token = localStorage.getItem('accessToken');
+    getInterviewReadiness(projectId, controller.signal).then((data) => {
+      if (controller.signal.aborted) return;
+      if (localStorage.getItem('accessToken') !== token) {
+        setResult({ projectId, attempt, error: '로그인 상태가 변경되었습니다. 다시 로그인해주세요.' });
+        return;
+      }
+      setResult({ projectId, attempt, data });
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) setResult({ projectId, attempt, error: error instanceof Error ? error.message : '준비 상태를 불러오지 못했습니다.' });
+    });
+    return () => controller.abort();
+  }, [projectId, attempt]);
+  const current = result?.projectId === projectId && result.attempt === attempt ? result : undefined;
+  if (!current) return <p role="status">인터뷰 준비 상태를 불러오는 중입니다.</p>;
+  if (!current.data) return <div role="alert"><p>{current.error}</p><button type="button" onClick={() => setAttempt((value) => value + 1)}>다시 시도</button></div>;
+  const data = current.data;
+  const fields = data.fieldStates;
+  const materialLabels: Record<string, string> = { FINAL_ARTWORK: '최종 작품 이미지', AI_MATERIAL: 'AI 활용 자료', MANUAL_EDIT_MATERIAL: '직접 수정 자료' };
+  const readiness = data.materialChecks.map((item) => ({ key: item.materialType, label: materialLabels[item.materialType] ?? item.materialType, ready: item.ready, readyDesc: '자료 준비됨' }));
+  const isReady = data.canStart;
+  const doneCount = fields.filter((f) => f.status === 'COMPLETED').length;
+  const needsWorkCount = fields.filter((f) => f.status === 'MISSING' || f.status === 'NEEDS_REVIEW').length;
 
   return (
     <Section>
@@ -45,6 +65,7 @@ export default function InterviewReady({ projectId, fields, onStart, onGoToProce
           <Subtitle>필수 자료가 준비되면 부족한 정보 중심으로 맞춤 질문을 생성해요.</Subtitle>
         </HeaderCopy>
         <HeaderAside>인터뷰 시작 전 확인</HeaderAside>
+        <button type="button" onClick={() => setAttempt((value) => value + 1)}>준비 상태 새로고침</button>
       </Header>
 
       <Cards>
@@ -63,18 +84,18 @@ export default function InterviewReady({ projectId, fields, onStart, onGoToProce
           <Caption>입력 여부가 아니라, 설명이 충분한지 기준으로 질문 대상을 정해요.</Caption>
           <RowList $gap={6} $minHeight={290}>
             {fields.map((field) => (
-              <InfoRow key={field.key} $height={50}>
+              <InfoRow key={field.field} $height={50}>
                 <RowText>
-                  <RowLabel>{field.label}</RowLabel>
+                  <RowLabel>{INTERVIEW_FIELD_LABELS[field.field]}</RowLabel>
                   <RowDesc>{field.summary}</RowDesc>
                 </RowText>
-                {field.status === 'done' ? (
+                {field.status === 'COMPLETED' || field.status === 'NOT_APPLICABLE' ? (
                   <Pill $tone="positive" $width={58}>
-                    완료
+                    {INTERVIEW_STATUS_LABELS[field.status]}
                   </Pill>
                 ) : (
                   <Pill $tone="neutral" $width={72}>
-                    보완 필요
+                    {INTERVIEW_STATUS_LABELS[field.status]}
                   </Pill>
                 )}
               </InfoRow>
@@ -117,13 +138,15 @@ export default function InterviewReady({ projectId, fields, onStart, onGoToProce
           )}
 
           <Actions>
+            {data.blockingReasons.map((item, index) => <p role="alert" key={`block-${index}`}>{item.message}</p>)}
+            {data.warnings.map((item, index) => <p key={`warning-${index}`}>{item.message}</p>)}
             {!isReady && (
               <AddMaterialButton type="button" onClick={onGoToProcess}>
                 제작 과정에서 자료 추가 →
               </AddMaterialButton>
             )}
-            <StartButton type="button" disabled={!isReady} onClick={onStart}>
-              AI 인터뷰 시작
+            <StartButton type="button" disabled={!isReady || starting} onClick={onStart}>
+              {starting ? '인터뷰 시작 중…' : 'AI 인터뷰 시작'}
             </StartButton>
           </Actions>
         </Panel>

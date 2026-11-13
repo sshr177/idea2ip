@@ -15,6 +15,13 @@ type StepTemplate = Omit<ContributionStepResult, 'stepId' | 'evidence'> & {
 
 /** 단계 유형별 기본 문구 (Figma 시안 그대로) */
 const TEMPLATES: Record<ContributionStepKind, StepTemplate> = {
+  unknown: {
+    summary: '창작 자료',
+    description: '자료 유형 정보가 제공되지 않았습니다.',
+    aiUsage: ['미확인'],
+    humanContribution: ['미확인'],
+    statementSource: '창작 자료 설명',
+  },
   sketch: {
     summary: '작업 아이디어 구상',
     description: '캐릭터의 전체 콘셉트와 구도, 표정 방향을 직접 스케치한 단계예요.',

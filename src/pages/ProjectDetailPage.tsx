@@ -1,4 +1,4 @@
-import { Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import styled from 'styled-components';
 import StatusBadge from '../components/StatusBadge';
 import ProjectTabs from '../components/project-detail/ProjectTabs';
@@ -13,6 +13,8 @@ import { DEFAULT_PROJECT_TAB, PROJECT_TABS, isProjectTabKey } from '../constants
 import type { ProjectTabKey } from '../constants/projectTabs';
 import { useProjectStore } from '../store/projectStore';
 import { colors } from '../styles/theme';
+import { useProjectDetail } from '../hooks/useProjectDetail';
+import ProjectThumbnailUpload from '../components/ProjectThumbnailUpload';
 
 // 프로젝트 상세 (/projects/:projectId?tab=process)
 // 탭별 내용 컴포넌트를 만들면 아래 renderTabContent에 추가
@@ -47,7 +49,14 @@ function renderTabContent(
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
-  const project = useProjectStore((state) => state.projects.find((p) => p.id === projectId));
+  const listProject = useProjectStore((state) => state.projects.find((p) => p.id === projectId));
+  const detail = useProjectDetail(projectId ?? '');
+  const project = detail.project ? {
+    ...listProject,
+    ...detail.project,
+    updatedAt: listProject?.updatedAt ?? detail.project.updatedAt,
+    status: listProject?.status ?? detail.project.status,
+  } : undefined;
   const [searchParams, setSearchParams] = useSearchParams();
 
   // 선택한 탭은 URL(?tab=)에 저장 → 새로고침/뒤로가기에도 유지
@@ -56,8 +65,16 @@ export default function ProjectDetailPage() {
 
   const changeTab = (tab: ProjectTabKey) => setSearchParams({ tab }, { replace: true });
 
-  // 없는 프로젝트(잘못된 주소 등)는 내 프로젝트 목록으로
-  if (!project) return <Navigate to="/projects" replace />;
+  if (detail.loading) return <Page role="status">프로젝트 정보를 불러오는 중입니다.</Page>;
+  if (!project) return (
+    <Page>
+      <p role="alert">{detail.error}</p>
+      {detail.status === 401 ? <Link to="/login">로그인하기</Link> : <>
+        <button type="button" onClick={detail.retry}>다시 시도</button>{' '}
+        <Link to="/projects">내 프로젝트로 이동</Link>
+      </>}
+    </Page>
+  );
 
   return (
     <Page>
@@ -68,6 +85,8 @@ export default function ProjectDetailPage() {
             <StatusBadge status={project.status} />
           </TitleRow>
           <Subtitle>등록 준비 중인 미술 창작 프로젝트를 한곳에서 확인해요</Subtitle>
+          {project.description && <Subtitle>{project.description}</Subtitle>}
+          <ProjectThumbnailUpload key={project.id} project={project} />
         </Header>
 
         <ProjectTabs

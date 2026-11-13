@@ -5,6 +5,7 @@ import { getWorkTypeLabel } from '../constants/workTypes';
 import StatusBadge from './StatusBadge';
 import type { Project } from '../types/project';
 import { formatDate } from '../utils/formatDate';
+import ProjectThumbnail from './ProjectThumbnail';
 
 // 대시보드 "최근 프로젝트" 카드 ("자세히" → 내 프로젝트에서 해당 프로젝트 선택)
 
@@ -15,7 +16,7 @@ export default function ProjectCard({ project }: { project: Project }) {
   return (
     <Card>
       <Body>
-        <Thumbnail>{thumbnailUrl && <img src={thumbnailUrl} alt="" />}</Thumbnail>
+        <Thumbnail><ProjectThumbnail src={thumbnailUrl} /></Thumbnail>
         <Info>
           <TextGroup>
             <Title>{title}</Title>

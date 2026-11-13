@@ -7,6 +7,7 @@ import Button from '../components/Button';
 import TextField from '../components/TextField';
 import { AlertSlot, Fields, Form } from '../components/AuthForm.styles';
 import { useAlertModal } from '../hooks/useAlertModal';
+import { signup, SignupError } from '../api/auth';
 
 // 회원가입 페이지
 
@@ -19,9 +20,12 @@ export default function SignupPage() {
   const pwCheckRef = useRef<HTMLInputElement>(null);
   const { showAlert, alertNode } = useAlertModal();
   const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
 
     if (!id.trim()) {
       showAlert('아이디를 입력해주세요.');
@@ -44,13 +48,23 @@ export default function SignupPage() {
       return;
     }
 
-    // TODO: 회원가입 API 연동 (성공했을 때만 아래 이동 실행)
-    navigate('/login');
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    try {
+      await signup({ loginId: id.trim(), password });
+      navigate('/login', { replace: true });
+    } catch (error) {
+      showAlert(error instanceof Error ? error.message : '회원가입하지 못했습니다.');
+      if (error instanceof SignupError && error.status === 409) idRef.current?.focus();
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <AuthLayout logoInCard>
-      <Form onSubmit={handleSubmit} noValidate>
+      <Form onSubmit={handleSubmit} noValidate aria-busy={isSubmitting}>
         <Fields>
           <TextField
             ref={idRef}
@@ -59,6 +73,7 @@ export default function SignupPage() {
             autoComplete="username"
             placeholder="아이디를 입력해주세요."
             value={id}
+            readOnly={isSubmitting}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setId(e.target.value)}
           />
           <TextField
@@ -69,6 +84,7 @@ export default function SignupPage() {
             autoComplete="new-password"
             placeholder="비밀번호를 입력해주세요."
             value={password}
+            readOnly={isSubmitting}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
           />
           <TextField
@@ -79,11 +95,14 @@ export default function SignupPage() {
             autoComplete="new-password"
             placeholder="비밀번호를 다시 입력해주세요."
             value={passwordCheck}
+            readOnly={isSubmitting}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setPasswordCheck(e.target.value)}
           />
         </Fields>
         <AlertSlot>{alertNode}</AlertSlot>
-        <SubmitButton type="submit">회원가입하기</SubmitButton>
+        <SubmitButton type="submit" disabled={isSubmitting}>
+          {isSubmitting ? '가입 중…' : '회원가입하기'}
+        </SubmitButton>
       </Form>
     </AuthLayout>
   );

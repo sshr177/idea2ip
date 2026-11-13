@@ -3,34 +3,40 @@ import penIcon from '../../assets/pen.svg';
 import type { ProcessMaterial } from '../../types/project';
 import { formatDate } from '../../utils/formatDate';
 import { colors } from '../../styles/theme';
+import MaterialImage from './MaterialImage';
 
 interface Props {
   index: number;
   material: ProcessMaterial;
   onEdit: (material: ProcessMaterial) => void;
+  onView: (material: ProcessMaterial) => void;
 }
 
 // 창작 과정 타임라인 항목 (번호 뱃지 + 제작자료 카드)
 
-export default function TimelineItem({ index, material, onEdit }: Props) {
+export default function TimelineItem({ index, material, onEdit, onView }: Props) {
   const { title, description, createdAt, thumbnailUrl } = material;
 
   return (
     <Row>
       <NumberCol>
-        <NumberBadge>{String(index + 1).padStart(2, '0')}</NumberBadge>
+        <NumberBadge>{String(material.materialOrder ?? index + 1).padStart(2, '0')}</NumberBadge>
       </NumberCol>
       <Card>
         <Left>
-          <Thumbnail>{thumbnailUrl && <img src={thumbnailUrl} alt="" />}</Thumbnail>
+          <Thumbnail>{material.files?.[0]
+            ? <MaterialImage materialId={material.id} fileId={material.files[0].fileId} fileName={material.files[0].fileName} compact />
+            : thumbnailUrl && <img src={thumbnailUrl} alt="" />}</Thumbnail>
           <Text>
             <TitleGroup>
               <Title>{title}</Title>
               <Desc>{description}</Desc>
             </TitleGroup>
-            <DateText>제작 날짜 {formatDate(createdAt)}</DateText>
+            <DateText>제작 날짜 {material.productionDate === null ? '미입력' : formatDate(material.productionDate ?? createdAt)}</DateText>
+            {!!material.files?.length && <Desc>첨부 {material.files.length}개 · {material.files.map((file) => file.fileName).join(', ')}</Desc>}
           </Text>
         </Left>
+        <EditButton type="button" aria-label={`${title} 상세 보기`} onClick={() => onView(material)}>상세 보기</EditButton>
         <EditButton type="button" aria-label={`${title} 수정`} onClick={() => onEdit(material)}>
           <img src={penIcon} alt="" width={16} height={16} />
           수정

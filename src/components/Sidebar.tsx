@@ -1,5 +1,9 @@
 import styled from 'styled-components';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useRef, useState } from 'react';
+import { logout } from '../api/auth';
+import { useProjectStore } from '../store/projectStore';
+import CurrentUserInfo from './CurrentUserInfo';
 import LogoImage from '../assets/LogoImage.png';
 import dashboardIcon from '../assets/dashboard.svg';
 import folderOpenIcon from '../assets/folder-open.svg';
@@ -72,6 +76,36 @@ const Icon = styled.img`
 `;
 
 export default function Sidebar() {
+  const navigate = useNavigate();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [error, setError] = useState('');
+  const logoutLock = useRef(false);
+
+  const handleLogout = async () => {
+    if (logoutLock.current) return;
+    logoutLock.current = true;
+    setIsLoggingOut(true);
+    setError('');
+    try {
+      await logout();
+      localStorage.removeItem('accessToken');
+      // 다른 계정에서 이전 사용자의 로컬 작업이 표시되지 않도록 정리합니다.
+      useProjectStore.setState({
+        projects: [],
+        materialsByProjectId: {},
+        finalWorkByProjectId: {},
+        interviewByProjectId: {},
+        briefByProjectId: {},
+      });
+      navigate('/login', { replace: true });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '로그아웃하지 못했습니다.');
+    } finally {
+      logoutLock.current = false;
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <Aside>
       <LogoImg src={LogoImage} alt="Idea2IP" />
@@ -83,6 +117,38 @@ export default function Sidebar() {
           </NavItem>
         ))}
       </Nav>
+      <LogoutArea>
+        <CurrentUserInfo />
+        {error && <p role="alert">{error}</p>}
+        <LogoutButton type="button" onClick={handleLogout} disabled={isLoggingOut}>
+          {isLoggingOut ? '로그아웃 중…' : '로그아웃'}
+        </LogoutButton>
+      </LogoutArea>
     </Aside>
   );
 }
+
+const LogoutArea = styled.div`
+  width: 100%;
+  margin-top: auto;
+
+  p {
+    padding: 0 16px;
+    color: #b42318;
+    font-size: 13px;
+  }
+`;
+
+const LogoutButton = styled.button`
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #68758d;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover { background: #f3f6fd; }
+  &:disabled { opacity: 0.6; cursor: wait; }
+`;

@@ -8,6 +8,7 @@ export const STEP_KIND_LABEL: Record<ContributionStepKind, string> = {
   ai: 'AI OUTPUT',
   manual: 'EDITED',
   final: 'FINAL',
+  unknown: '유형 미제공',
 };
 
 /**
@@ -20,10 +21,10 @@ export function buildContributionTimeline(
 ): ContributionTimelineItem[] {
   const items: ContributionTimelineItem[] = materials.map((material) => ({
     id: material.id,
-    kind: material.type,
+    kind: material.type ?? 'unknown',
     title: material.title,
     registeredAt: resolveRegisteredAt(material, material.createdAt),
-    fileNames: material.imageName ? [material.imageName] : [],
+    fileNames: material.files ? material.files.map((file) => file.fileName) : material.imageName ? [material.imageName] : [],
     userInput: { description: material.description, aiTool: material.aiTool },
   }));
 

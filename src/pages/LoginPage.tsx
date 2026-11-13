@@ -6,6 +6,8 @@ import TextField from '../components/TextField';
 import { AlertSlot, Fields, FooterLink, Form } from '../components/AuthForm.styles';
 import { useAlertModal } from '../hooks/useAlertModal';
 import { useNavigate } from 'react-router-dom';
+import { login } from '../api/auth';
+import { useProjectStore } from '../store/projectStore';
 
 // 로그인 페이지
 
@@ -16,9 +18,12 @@ export default function LoginPage() {
   const pwRef = useRef<HTMLInputElement>(null);
   const { showAlert, alertNode } = useAlertModal();
   const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
 
     if (!id.trim()) {
       showAlert('아이디를 입력해주세요.');
@@ -31,13 +36,28 @@ export default function LoginPage() {
       return;
     }
 
-    // TODO: 로그인 API 연동 (성공했을 때만 아래 이동 실행)
-    navigate('/');
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    try {
+      const { accessToken } = await login({ loginId: id.trim(), password });
+      try {
+        localStorage.setItem('accessToken', accessToken);
+      } catch {
+        throw new Error('인증 정보를 저장할 수 없습니다. 브라우저 저장소 설정을 확인해주세요.');
+      }
+      useProjectStore.setState({ projects: [], materialsByProjectId: {}, finalWorkByProjectId: {}, interviewByProjectId: {}, briefByProjectId: {} });
+      navigate('/', { replace: true });
+    } catch (error) {
+      showAlert(error instanceof Error ? error.message : '로그인하지 못했습니다.');
+    } finally {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <AuthLayout>
-      <Form onSubmit={handleSubmit} noValidate>
+      <Form onSubmit={handleSubmit} noValidate aria-busy={isSubmitting}>
         <Fields>
           <TextField
             ref={idRef}
@@ -46,6 +66,7 @@ export default function LoginPage() {
             autoComplete="username"
             placeholder="아이디를 입력해주세요."
             value={id}
+            readOnly={isSubmitting}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setId(e.target.value)}
           />
           <TextField
@@ -56,11 +77,14 @@ export default function LoginPage() {
             autoComplete="current-password"
             placeholder="비밀번호를 입력해주세요."
             value={password}
+            readOnly={isSubmitting}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
           />
         </Fields>
         <AlertSlot>{alertNode}</AlertSlot>
-        <Button type="submit">로그인하기</Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? '로그인 중…' : '로그인하기'}
+        </Button>
         <FooterLink to="/signup">회원가입</FooterLink>
       </Form>
     </AuthLayout>

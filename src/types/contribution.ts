@@ -1,5 +1,5 @@
 /** 창작 기여 정리 단계 유형 → 패널 라벨 SKETCH / AI OUTPUT / EDITED / FINAL */
-export type ContributionStepKind = 'sketch' | 'ai' | 'manual' | 'final';
+export type ContributionStepKind = 'sketch' | 'ai' | 'manual' | 'final' | 'unknown';
 
 /** 근거 종류: 첨부자료 기반 / 사용자 진술 / 미확인 */
 export type EvidenceKind = 'attachment' | 'user-statement' | 'unverified';

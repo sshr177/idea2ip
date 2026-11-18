@@ -7,7 +7,6 @@ import CurrentUserInfo from './CurrentUserInfo';
 import LogoImage from '../assets/LogoImage.png';
 import dashboardIcon from '../assets/dashboard.svg';
 import folderOpenIcon from '../assets/folder-open.svg';
-import folderPlusIcon from '../assets/folder-plus.svg';
 import bookOpenIcon from '../assets/book-open.svg';
 import logoutIcon from '../assets/logout.svg';
 import { breakpoints, colors, media, MOBILE_TOP_BAR_HEIGHT, sidebarWidths } from '../styles/theme';
@@ -15,7 +14,6 @@ import { breakpoints, colors, media, MOBILE_TOP_BAR_HEIGHT, sidebarWidths } from
 const NAV_ITEMS = [
   { to: '/', label: '대시보드', icon: dashboardIcon, end: true },
   { to: '/projects', label: '내 프로젝트', icon: folderOpenIcon, end: false },
-  { to: '/projects/new', label: '새 프로젝트', icon: folderPlusIcon, end: true },
   { to: '/guide', label: '사용 가이드', icon: bookOpenIcon, end: false },
 ];
 

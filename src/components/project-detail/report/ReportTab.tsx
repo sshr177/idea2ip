@@ -214,7 +214,7 @@ export default function ReportTab({ project }: { project: Project }) {
       <Refresh>
         <OutlineBlueButton type="button" disabled={overview.refreshing} onClick={refreshAll}>현황 새로고침</OutlineBlueButton>
       </Refresh>
-      <ReportVersionList key={`versions/${project.id}`} projectId={project.id} />
+      <ReportVersionList key={`versions/${project.id}`} projectId={project.id} latestReady={job.ready} />
     </Section>
   );
 }

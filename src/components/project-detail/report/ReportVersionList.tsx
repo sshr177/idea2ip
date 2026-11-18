@@ -8,27 +8,37 @@ import type { ReportVersionSummary } from '../../../api/reports';
 import ReportVersionDetail from './ReportVersionDetail';
 import ReportPdfDownload from './ReportPdfDownload';
 
-export default function ReportVersionList({ projectId }: { projectId: string }) {
-  const [query, setQuery] = useState<{ attempt: number; before?: number }>({ attempt: 0 });
+export default function ReportVersionList({ projectId, latestReady }: { projectId: string; latestReady?: ReportVersionSummary }) {
+  const readyVersionId = latestReady?.versionId;
+  const [query, setQuery] = useState<{ attempt: number; before?: number; readyVersionId?: number }>({ attempt: 0 });
+  // 새 버전이 준비되면 이전 페이지 커서 대신 첫 페이지를 다시 조회합니다.
+  const before = query.readyVersionId === readyVersionId ? query.before : undefined;
+  const { attempt } = query;
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [result, setResult] = useState<{ attempt: number; versions: ReportVersionSummary[]; next: number | null; error?: string }>();
+  const [result, setResult] = useState<{ attempt: number; readyVersionId?: number; versions: ReportVersionSummary[]; next: number | null; error?: string }>();
   useEffect(() => {
     const controller = new AbortController();
     const token = localStorage.getItem('accessToken');
-    getReportVersions(projectId, { beforeVersionNo: query.before, limit: 20 }, controller.signal).then((page) => {
+    getReportVersions(projectId, { beforeVersionNo: before, limit: 20 }, controller.signal).then((page) => {
       if (controller.signal.aborted) return;
       if (localStorage.getItem('accessToken') !== token) throw new Error('로그인 상태가 변경되었습니다.');
       setResult((old) => {
-        const items = query.before === undefined ? page.versions : [...(old?.versions ?? []), ...page.versions];
+        const items = before === undefined ? page.versions : [...(old?.versions ?? []), ...page.versions];
         const unique = [...new Map(items.map((item) => [item.versionId, item])).values()].sort((a, b) => b.versionNo - a.versionNo);
-        return { attempt: query.attempt, versions: unique, next: page.nextBeforeVersionNo };
+        return { attempt, readyVersionId, versions: unique, next: page.nextBeforeVersionNo };
       });
     }).catch((error: unknown) => {
-      if (!controller.signal.aborted) setResult((old) => ({ attempt: query.attempt, versions: old?.versions ?? [], next: old?.next ?? null, error: error instanceof Error ? error.message : '버전 목록 조회에 실패했습니다.' }));
+      if (!controller.signal.aborted) setResult((old) => ({ attempt, readyVersionId, versions: old?.versions ?? [], next: old?.next ?? null, error: error instanceof Error ? error.message : '버전 목록 조회에 실패했습니다.' }));
     });
     return () => controller.abort();
-  }, [projectId, query]);
-  const loading = result?.attempt !== query.attempt;
+  }, [projectId, attempt, before, readyVersionId]);
+  const loading = result?.attempt !== attempt || result?.readyVersionId !== readyVersionId;
+  const fetchedVersions = result?.versions ?? [];
+  // 목록 응답을 기다리는 동안에도 본문에서 확인한 READY 상태를 표시합니다.
+  const versions = latestReady
+    ? [...fetchedVersions.filter((version) => version.versionId !== latestReady.versionId), latestReady]
+      .sort((a, b) => b.versionNo - a.versionNo)
+    : fetchedVersions;
   const statuses = { QUEUED: '대기', RUNNING: '생성 중', READY: '준비 완료', FAILED: '실패' };
   const operations = { GENERATE: '최초 생성', UPDATE: '입력 업데이트', EDIT: '직접 편집' };
   const stages = { COLLECTING_INPUT: '입력 수집', LINKING_SOURCES: '출처 연결', DRAFTING: '본문 작성', RENDERING_PDF: 'PDF 생성' } as const;
@@ -43,8 +53,8 @@ export default function ReportVersionList({ projectId }: { projectId: string }) 
     {loading && <StatusMessage plain message="버전 목록을 불러오는 중입니다." />}
     {result?.error && <StatusMessage plain role="alert" message={result.error}
       action={<SmallButton type="button" disabled={loading} onClick={() => setQuery((old) => ({ ...old, attempt: old.attempt + 1 }))}>다시 시도</SmallButton>} />}
-    {!loading && !result?.error && !result?.versions.length && <Empty>아직 생성된 리포트 버전이 없습니다.</Empty>}
-    {!!result?.versions.length && <List>{result.versions.map((version) => <Item key={version.versionId}>
+    {!loading && !result?.error && !versions.length && <Empty>아직 생성된 리포트 버전이 없습니다.</Empty>}
+    {!!versions.length && <List>{versions.map((version) => <Item key={version.versionId}>
       <RowLeft>
         <NumberBox>v{version.versionNo}</NumberBox>
         <RowText>
@@ -62,7 +72,7 @@ export default function ReportVersionList({ projectId }: { projectId: string }) 
         <ReportPdfDownload projectId={projectId} versionId={version.versionId} available={version.status === 'READY' && version.pdfAvailable} variant="outline" />
       </ItemActions>
     </Item>)}</List>}
-    {result?.next != null && !result.error && <MoreButton type="button" disabled={loading} onClick={() => setQuery((old) => ({ attempt: old.attempt + 1, before: result.next! }))}>이전 버전 더 보기</MoreButton>}
+    {result?.next != null && !result.error && <MoreButton type="button" disabled={loading} onClick={() => setQuery((old) => ({ attempt: old.attempt + 1, before: result.next!, readyVersionId }))}>이전 버전 더 보기</MoreButton>}
     {selectedId !== null && <ReportVersionDetail key={selectedId} projectId={projectId} versionId={selectedId} onClose={() => setSelectedId(null)} />}
   </Card>;
 }
